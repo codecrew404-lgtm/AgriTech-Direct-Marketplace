@@ -1,1 +1,265 @@
 // Start of frontend code
+import streamlit as st
+import pandas as pd
+import time
+from datetime import datetime
+farmers = {
+    "Farmer Ramesh": {
+        "produce": "🥫 Tomatoes",
+        "price_per_kg": 20,
+        "quantity_kg": 100,
+        "location": "Mumbai",
+        "rating": 4.8
+    },
+    "Farmer Sita": {
+        "produce": "🥔 Potatoes", 
+        "price_per_kg": 15,
+        "quantity_kg": 150,
+        "location": "Pune",
+        "rating": 4.9
+    },
+    "Farmer Anil": {
+        "produce": "🌽 Corn",
+        "price_per_kg": 25,
+        "quantity_kg": 80,
+        "location": "Nashik",
+        "rating": 4.7
+    }
+}
+
+restaurants = [
+    "Green Leaf Restaurant",
+    "Spice Hub", 
+    "City Diner",
+    "TasteBud Bistro"
+]
+
+orders = []
+st.set_page_config(
+    page_title="ProductBridge - Farm to Restaurant",
+    page_icon="🌉",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ProductBridge Custom CSS
+st.markdown("""
+    <style>
+    .main {background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)}
+    .metric-container {background: linear-gradient(45deg, #ff6b6b, #4ecdc4); color: white !important}
+    .stMetric > label {color: white !important; font-weight: 700}
+    .stButton > button {border-radius: 25px; font-weight: 600; font-size: 16px}
+    .sidebar .sidebar-content {background: linear-gradient(180deg, #667eea 0%, #764ba2 100%)}
+    </style>
+""", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown("""
+        <div style='text-align: center; color: white'>
+            <h1 style='color: white; font-size: 2rem;'>🌉 ProductBridge</h1>
+            <p style='color: #e0e0e0'>Farm → Restaurant Direct</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Live Stats
+    total_stock = sum(f["quantity_kg"] for f in farmers.values())
+    col1, col2 = st.columns(2)
+    col1.metric("🥬 Farmers", len(farmers), "↑ 3")
+    col2.metric("📦 Stock", f"{total_stock}kg", "↓ 25kg")
+    
+    st.divider()
+    page = st.selectbox("Navigate:", ["🏠 Home", "🍅 Marketplace", "🛒 Orders", "📊 Analytics", "💬 Support"])
+
+if page == "🏠 Home":
+    # Hero Section
+    st.markdown("""
+        <div style='text-align: center; padding: 2rem; background: linear-gradient(45deg, #ff6b6b, #4ecdc4); 
+        border-radius: 20px; color: white; margin-bottom: 2rem'>
+            <h1 style='font-size: 3.5rem; margin: 0;'>🌉 ProductBridge</h1>
+            <p style='font-size: 1.5rem; margin: 1rem 0;'>Real-time Farm to Restaurant Marketplace</p>
+            <p style='font-size: 1.2rem;'>Zero Middlemen • Live Pricing • 12hr Delivery</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Stats Row
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("👨‍🌾 Farmers", "23", "+2")
+    col2.metric("🏪 Restaurants", "15", "+1") 
+    col3.metric("📦 Orders", "47", "+12")
+    col4.metric("💰 Revenue", "₹2.4L", "+₹15k")
+    
+    st.subheader("🔥 Live Marketplace")
+    cols = st.columns(3)
+    for i, (farmer, data) in enumerate(list(farmers.items())[:3]):
+        with cols[i]:
+            st.markdown(f"""
+                <div style='background: white; padding: 1.5rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2)'>
+                    <h3 style='color: #2c3e50'>{data['produce']}</h3>
+                    <h2 style='color: #27ae60; font-size: 2rem;'>₹{data['price_per_kg']}</h2>
+                    <p><strong>{data['quantity_kg']}kg</strong> available</p>
+                    <p>📍 {data['location']} • ⭐ {data['rating']}</p>
+                </div>
+            """, unsafe_allow_html=True)
+
+elif page == "🍅 Marketplace":
+    st.title("🍅 Fresh Produce Marketplace")
+    
+    # Filters
+    col1, col2, col3 = st.columns(3)
+    with col1: produce_filter = st.selectbox("Filter:", ["All", "Tomatoes", "Potatoes", "Corn"])
+    with col2: sort_option = st.selectbox("Sort:", ["Price Low", "Stock High", "Rating"])
+    with col3: 
+        if st.button("🛒 View Cart", use_container_width=True):
+            st.session_state.show_cart = True
+    
+    # Product Cards
+    filtered_farmers = {k: v for k, v in farmers.items() 
+                       if produce_filter == "All" or produce_filter in v['produce']}
+    
+    cols = st.columns(3)
+    for i, (farmer, data) in enumerate(filtered_farmers.items()):
+        col = cols[i % 3]
+        with col:
+            st.markdown(f"""
+                <div style='border: 2px solid #e0e0e0; border-radius: 15px; padding: 1.5rem; height: 300px'>
+                    <h3>{data['produce']} - {farmer}</h3>
+                    <div style='font-size: 2.5rem; color: #27ae60; font-weight: bold'>
+                        ₹{data['price_per_kg']}
+                    </div>
+                    <p><strong>{data['quantity_kg']}kg available</strong></p>
+                    <p style='color: #666'>📍 {data['location']} ⭐ {data['rating']}</p>
+                    
+                    <div style='margin: 1rem 0'>
+                        <input type='number' id='qty_{farmer}' min='1' max='{data["quantity_kg"]}' 
+                               style='width: 80px; padding: 0.5rem; border-radius: 5px; border: 1px solid #ddd'>
+                    </div>
+                    
+                    <button onclick='addToCart("{farmer}")' 
+                            style='width: 100%; background: linear-gradient(45deg, #ff6b6b, #ff8e8e); 
+                            color: white; border: none; padding: 12px; border-radius: 25px; 
+                            font-weight: 600; cursor: pointer'>
+                        ➕ Add to Order
+                    </button>
+                </div>
+            """, unsafe_allow_html=True)
+
+elif page == "🛒 Orders":
+    st.title("🛒 Order Management")
+    
+    # Initialize cart
+    if 'cart' not in st.session_state:
+        st.session_state.cart = {}
+    
+    # Restaurant & Cart
+    col1, col2 = st.columns([2, 3])
+    
+    with col1:
+        st.subheader("🏪 Select Restaurant")
+        selected_restaurant = st.selectbox("", restaurants, key="restaurant")
+        
+        st.subheader("📅 Delivery")
+        delivery_date = st.date_input("Date:", value=datetime.now())
+    
+    with col2:
+        if st.session_state.cart:
+            st.subheader("🛒 Your Order")
+            cart_items = []
+            total = 0
+            
+            for farmer, qty in st.session_state.cart.items():
+                data = farmers[farmer]
+                cost = qty * data['price_per_kg']
+                total += cost
+                cart_items.append([farmer, data['produce'], qty, f"₹{data['price_per_kg']}", f"₹{cost}"])
+            
+            cart_df = pd.DataFrame(cart_items, columns=["Farmer", "Produce", "Qty", "Rate", "Total"])
+            st.dataframe(cart_df, use_container_width=True)
+            
+            st.metric("Grand Total", f"₹{total}")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ Place Order", type="primary", use_container_width=True):
+                    for farmer, qty in st.session_state.cart.items():
+                        if qty <= farmers[farmer]['quantity_kg']:
+                            farmers[farmer]['quantity_kg'] -= qty
+                            orders.append({
+                                'restaurant': selected_restaurant,
+                                'farmer': farmer,
+                                'qty': qty,
+                                'cost': qty * farmers[farmer]['price_per_kg'],
+                                'date': str(delivery_date)
+                            })
+                            st.success(f"✅ Order #{len(orders)} placed for {selected_restaurant}!")
+                            st.balloons()
+                        else:
+                            st.error(f"❌ Insufficient stock from {farmer}")
+                    
+                    st.session_state.cart = {}
+                    st.rerun()
+            
+            with col2:
+                if st.button("🗑️ Clear Cart", use_container_width=True):
+                    st.session_state.cart = {}
+                    st.rerun()
+        else:
+            st.info("👆 Add items from Marketplace first!")
+    
+    # Quick Add
+    st.subheader("⚡ Quick Order")
+    col1, col2, col3 = st.columns(3)
+    with col1: farmer = st.selectbox("Farmer:", list(farmers.keys()), key="quick_farmer")
+    with col2: qty = st.number_input("KG:", 1, 100, key="quick_qty")
+    with col3: 
+        if st.button("➕ Add", key="quick_add"):
+            st.session_state.cart[farmer] = st.session_state.cart.get(farmer, 0) + qty
+            st.rerun()
+
+elif page == "📊 Analytics":
+    st.title("📊 ProductBridge Analytics")
+    
+    if orders:
+        orders_df = pd.DataFrame(orders)
+        st.dataframe(orders_df, use_container_width=True)
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Orders", len(orders))
+        col2.metric("Total Revenue", f"₹{sum(o['cost'] for o in orders):,.0f}")
+        col3.metric("Avg Order", f"₹{sum(o['cost'] for o in orders)/len(orders):.0f}")
+        
+        st.subheader("Top Farmers")
+        top_farmers = pd.DataFrame(orders).groupby('farmer')['cost'].sum().sort_values(ascending=False)
+        st.bar_chart(top_farmers)
+    else:
+        st.info("🚀 Start placing orders to see analytics!")
+
+elif page == "💬 Support":
+    st.title("💬 ProductBridge Assistant")
+    st.markdown("""
+    🤖 **Hi! ProductBridge Bot here to help:**
+    
+    **Available Commands:**
+    • "show stock" - Live inventory 
+    • "order status" - Check deliveries
+    • "add farmer" - List new produce
+    • "help" - Full features
+    
+    **📞 Human Support: +91 98765 43210**
+    """)
+    
+    query = st.text_input("Ask anything:")
+    if query.lower() in ['stock', 'show stock', 'inventory']:
+        total_stock = sum(f["quantity_kg"] for f in farmers.values())
+        st.success(f"✅ **{total_stock}kg** available from **{len(farmers)}** farmers!")
+    elif query.lower() == 'order status':
+        if orders:
+            st.success(f"✅ **{len(orders)}** active orders • **{sum(o['cost'] for o in orders):,.0f}** revenue")
+        else:
+            st.info("📭 No orders yet!")
+st.markdown("---")
+st.markdown("""
+    <div style='text-align: center; padding: 2rem; color: #666'>
+        <h3>🌉 ProductBridge 2026</h3>
+        <p>Connecting Mumbai Farmers ↔ Restaurants | Built for Hackathons</p>
+        <p>👨‍💻 Pure Python • ⚡ Streamlit • 📱 Fully Responsive</p>
+    </div>
+""", unsafe_allow_html=True)
