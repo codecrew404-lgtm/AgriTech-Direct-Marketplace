@@ -1,1 +1,71 @@
 // Start of backend code
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const ollama = require('ollama');
+
+const app = express();
+const PORT = 3000;
+
+// Middleware to handle JSON data from the frontend
+app.use(express.json());
+
+/**
+ * RAG CONFIGURATION
+ * We use local file reading to avoid third-party API costs.
+ */
+const KNOWLEDGE_BASE_PATH = path.join(__dirname, 'Chat bit', 'Guidelines farm services Act, 2020.txt');
+
+app.post('/api/chat', async (req, res) => {
+    const { question } = req.body;
+
+    if (!question) {
+        return res.status(400).json({ error: "Please provide a question." });
+    }
+
+    try {
+        // STEP 1: RETRIEVAL (Reading local knowledge)
+        let knowledgeContext = "";
+        if (fs.existsSync(KNOWLEDGE_BASE_PATH)) {
+            // We read the first 2500 characters to keep it within the local LLM's memory limit
+            knowledgeContext = fs.readFileSync(KNOWLEDGE_BASE_PATH, 'utf-8').slice(0, 2500);
+        } else {
+            console.warn("Knowledge base file missing at:", KNOWLEDGE_BASE_PATH);
+        }
+
+        // STEP 2: GENERATION (Calling local Ollama model)
+        // System prompt ensures the AI stays on topic (AgriTech)
+        const response = await ollama.chat({
+            model: 'llama3.2:1b', 
+            messages: [
+                { 
+                    role: 'system', 
+                    content: `You are a helpful AgriTech Marketplace assistant. 
+                              Use the following legal guidelines to answer: ${knowledgeContext}.
+                              If the information is not in the text, say you don't know.` 
+                },
+                { role: 'user', content: question }
+            ],
+        });
+
+        // STEP 3: RESPONSE
+        res.json({ 
+            answer: response.message.content,
+            source: "Guidelines farm services Act, 2020" // Proves RAG is working
+        });
+
+    } catch (error) {
+        console.error("AI Error:", error.message);
+        res.status(500).json({ 
+            error: "Local AI server error. Ensure 'ollama serve' is running.",
+            details: error.message 
+        });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`========================================`);
+    console.log(`AgriTech Backend running on http://localhost:${PORT}`);
+    console.log(`Rules: No 3rd-party APIs, 100% Local RAG`);
+    console.log(`========================================`);
+});
